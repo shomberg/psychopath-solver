@@ -1,70 +1,79 @@
 import java.util.*;
 import java.awt.*;
-import java.awt.Robot;
 import java.awt.event.*;
+import java.awt.image.BufferedImage;
+import java.io.*;
+
+import javax.imageio.ImageIO;
 
 public class Psychopath_Solver {
 	
-	static Color startC = new Color(64,254,64);
-	static Color blankC = new Color(153,204,255);
-	static Color pinkC = new Color(178,178,127);
-	static Color blackC = new Color(76,101,127);
+	static final Color startC = new Color(64,254,64);
+	static final Color blankC = new Color(153,204,255);
+	static final Color pinkC = new Color(178,178,127);
+	static final Color blackC = new Color(76,101,127);
+	
+	static final int backgroundRedThreshold = 170;
+	static final int backgroundGreenThreshold = 210;
+	static final int backgroundBlueThreshold = 255;
+	
 	static boolean doBacktrack;
-
+	static final int topLeftX = 69;
+	static final int topLeftY = 276;
+	static final int pixelWidth = 355;
+	static final int pixelHeight = 355;
+	static final int xOffset = 9;
+	static final int yOffset = 9;
+	
 	public static void main(String[] args) throws AWTException {
-//		boolean[][] black = {
-//				{false,false,false,false,false,false,false,false,false,true ,false,false,false,false,true ,false,false,false,false},
-//				{false,false,false,false,true ,false,true ,false,false,true ,false,false,false,false,false,false,false,true ,false},
-//				{false,false,false,true ,false,false,false,true ,false,false,true ,false,false,true ,false,false,true ,true ,false},
-//				{false,false,false,false,true ,false,true ,false,false,true ,false,false,false,false,true ,false,true ,false,false},
-//				{false,false,false,false,false,false,true ,false,false,false,false,true ,false,false,false,false,true ,false,false}};
-//		
-//		boolean[][] pink = {
-//				{false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false},
-//				{false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false},
-//				{false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false},
-//				{false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false},
-//				{false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false}};
-//		boolean[][] black = {
-//				{true , true , true , true , true , true , true , true , true },
-//				{true , false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false},
-//				{true , false, false, false, false, false, false, false, true },
-//				{true , false, false, false, false, false, false, false, true },
-//				{true , false, false, true , false, false, false, false, true },
-//				{true , false, false, false, true , false, false, false, true },
-//				{true , false, false, false, false, false, false, false, true },
-//				{false, false, false, false, false, false, false, false, true },
-//				{false, false, true , true , true , true , true , true , true }
-//		};
-//		boolean[][] pink = {
-//				{false, false, false, false, false, false, false, false, false},
-//				{false, false, false, true , false, true , false, false, false},
-//				{false, false, true , false, false, false, true , false, false},
-//				{false, true , false, true , false, true , false, true , false},
-//				{false, false, true , false, true , false, true , false, false},
-//				{false, true , false, true , false, true , false, true , false},
-//				{false, false, true , false, true , false, true , false, false},
-//				{false, true , false, true , false, true , false, true , false},
-//				{false, false, false, false, false, false, false, false, false}
-//		};
 		Robot r = new Robot();
-		int width = 19;
-		int height = 19;
-		int startx = 0;
-		int starty = 0;
-		boolean[][] black = new boolean[height][width];
-		boolean[][] pink = new boolean[height][width];
-		double squarePixel = 19.7;
+		int gridWidth = 0;
+		int gridHeight = 0;
+		double gridOffset = 0;
+		//Identify grid dimensions
+		BufferedImage screenCap = r.createScreenCapture(new Rectangle(topLeftX,topLeftY,pixelWidth,pixelHeight));
+		int pixelSinceBackground = xOffset;
+		boolean isBack = false;
+		int lastSwitchBackground = 0;
+		ArrayList<Integer> offsets = new ArrayList<Integer>();
+		for(int x = 0; x < pixelWidth; x++){
+			Color query = new Color(screenCap.getRGB(x, 0));
+			boolean isBackNew = isBackground(query);
+			if(isBackNew && !isBack){
+				offsets.add(pixelSinceBackground);
+				pixelSinceBackground = 0;
+				lastSwitchBackground = x;
+			}
+			pixelSinceBackground++;
+			isBack = isBackNew;
+		}
+		double minDiff = 100000;
+		for(int width = offsets.size(); width < 50; width++){
+			double diff = 0;
+			double offset = (lastSwitchBackground+xOffset)/(double)width;
+			for(Integer actualOffset : offsets){
+				diff += Math.abs(offset-actualOffset.intValue());
+			}
+			if(diff < minDiff){
+				gridWidth = width+1;
+				gridOffset = offset;
+				minDiff = diff;
+			}
+		}
+		for(gridHeight=1; gridHeight*gridOffset < pixelHeight && !isBackground(new Color(screenCap.getRGB(0, (int)(gridHeight*gridOffset)))); gridHeight++);
+		
+		boolean[][] black = new boolean[gridHeight][gridWidth];
+		boolean[][] pink = new boolean[gridHeight][gridWidth];
 		Coordinate start = new Coordinate(0,0);
-		Coordinate end = new Coordinate(width-1,height-1);
-		int max = 33;
-		int maxTry=33;
+		Coordinate end = new Coordinate(gridWidth-1,gridHeight-1);
+		int max = 76;
+		int maxTry=76;
 		doBacktrack = false;
 		delay(500);
 		System.out.println("reading board");
-		for(int x = 0; x < width; x++){
-			for(int y = 0; y < height; y++){
-				Color c = r.getPixelColor(69+(int)((x+startx)*squarePixel), 276+(int)((y+starty)*squarePixel));
+		for(int x = 0; x < gridWidth; x++){
+			for(int y = 0; y < gridHeight; y++){
+				Color c = new Color(screenCap.getRGB((int)(x*gridOffset), (int)(y*gridOffset)));
 				if(c.equals(startC)){
 					start=new Coordinate(x,y);
 				} else if(c.equals(blackC)){
@@ -172,6 +181,10 @@ public class Psychopath_Solver {
 		}
 		path.remove(0);
 		return null;
+	}
+	
+	public static boolean isBackground(Color c){
+		return c.getRed()>=backgroundRedThreshold && c.getGreen()>=backgroundGreenThreshold && c.getBlue()>=backgroundBlueThreshold;
 	}
 	
 	public static boolean[][] copy(boolean[][] in){
