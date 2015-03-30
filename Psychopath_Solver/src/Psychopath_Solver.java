@@ -36,38 +36,35 @@ public class Psychopath_Solver {
 		boolean isBack = false;
 		int lastSwitchBackground = 0;
 		ArrayList<Integer> offsets = new ArrayList<Integer>();
+		int minOffset = pixelWidth;
 		for(int x = 0; x < pixelWidth; x++){
 			Color query = new Color(screenCap.getRGB(x, 0));
 			boolean isBackNew = isBackground(query);
 			if(isBackNew && !isBack){
 				offsets.add(pixelSinceBackground);
+				minOffset = Math.min(pixelSinceBackground, minOffset);
 				pixelSinceBackground = 0;
 				lastSwitchBackground = x;
 			}
 			pixelSinceBackground++;
 			isBack = isBackNew;
 		}
-		double minDiff = 100000;
-		for(int width = offsets.size(); width < 50; width++){
-			double diff = 0;
-			double offset = (lastSwitchBackground+xOffset)/(double)width;
-			for(Integer actualOffset : offsets){
-				diff += Math.abs(offset-actualOffset.intValue());
-			}
-			if(diff < minDiff){
-				gridWidth = width+1;
-				gridOffset = offset;
-				minDiff = diff;
+		for(int i = 0; i < offsets.size(); i++){
+			int thisOffset = offsets.get(i);
+			if(thisOffset > 1.5*minOffset){
+				offsets.set(i, thisOffset-minOffset);
+				offsets.add(i,minOffset);
 			}
 		}
+		gridWidth = offsets.size()+1;
+		gridOffset = (lastSwitchBackground+xOffset)/(double)offsets.size();
 		for(gridHeight=1; gridHeight*gridOffset < pixelHeight && !isBackground(new Color(screenCap.getRGB(0, (int)(gridHeight*gridOffset)))); gridHeight++);
 		
 		boolean[][] black = new boolean[gridHeight][gridWidth];
 		boolean[][] pink = new boolean[gridHeight][gridWidth];
 		Coordinate start = new Coordinate(0,0);
-		Coordinate end = new Coordinate(gridWidth-1,gridHeight-1);
-		int max = 76;
-		int maxTry=76;
+		Set<Coordinate> end = new HashSet<Coordinate>();
+		int max = 160;
 		doBacktrack = false;
 		delay(500);
 		System.out.println("reading board");
@@ -83,30 +80,26 @@ public class Psychopath_Solver {
 				} else if(c.equals(blankC)){
 					//Do Nothing
 				} else{
-					end = new Coordinate(x,y);
+					end.add(new Coordinate(x,y));
 				}
 			}
 		}
-//		black[9][5]=true;
-//		end=new Coordinate(1,17);
+
 		printBoard(black, pink, start, end);
-		for(; max <= maxTry; max++){
-			System.out.println("Beginning search for: " + max);
-			ArrayList<Coordinate> result = findPath(black, pink, start, end, new ArrayList<Coordinate>(), new ArrayList<Coordinate>(), max);
-			System.out.println("Result:");
-			System.out.println(result);
-			if(result != null){
-				try {
-					ArrayList<Direction> steps = getSteps(result);
-					System.out.println(steps);
-					for(Direction d:steps){
-						keyType(r, d.getKeycode());
-					}
-				} catch (Exception e) {
-					System.out.println("Error: Path is not continuous");
-					System.out.println(e.getMessage());
+		System.out.println("Beginning search for: " + max);
+		ArrayList<Coordinate> result = findPath(black, pink, start, end, new ArrayList<Coordinate>(), new ArrayList<Coordinate>(), max);
+		System.out.println("Result:");
+		System.out.println(result);
+		if(result != null){
+			try {
+				ArrayList<Direction> steps = getSteps(result);
+				System.out.println(steps);
+				for(Direction d:steps){
+					keyType(r, d.getKeycode());
 				}
-				break;
+			} catch (Exception e) {
+				System.out.println("Error: Path is not continuous");
+				System.out.println(e.getMessage());
 			}
 		}
 	}
@@ -121,16 +114,20 @@ public class Psychopath_Solver {
 	}
 
 
-	public static ArrayList<Coordinate> findPath(boolean[][] black, boolean[][] pink, Coordinate current, Coordinate target, ArrayList<Coordinate> path, ArrayList<Coordinate> backtrack, int max){
+	public static ArrayList<Coordinate> findPath(boolean[][] black, boolean[][] pink, Coordinate current, Set<Coordinate> targets, ArrayList<Coordinate> path, ArrayList<Coordinate> backtrack, int max){
 		path.add(0,current);
-		if(current.equals(target)){
+		if(targets.contains(current)){
 			return path;
 		}
 		if(path.size()==max+1){
 			path.remove(0);
 			return null;
 		}
-		if(Math.abs(current.x-target.x) + Math.abs(current.y-target.y) > max-path.size()+1){
+		boolean notTooFar = false;
+		for(Coordinate target : targets){
+			notTooFar = notTooFar || !(Math.abs(current.x-target.x) + Math.abs(current.y-target.y) > max-path.size()+1);
+		}
+		if(!notTooFar){
 			path.remove(0);
 			return null;
 		}
@@ -164,7 +161,7 @@ public class Psychopath_Solver {
 						iterate[current.y+2*yOff][current.x+2*xOff]=true;
 						iterate[next.y][next.x]=false;
 						if(doBacktrack){
-							for(int i = 0; i < 0; i++){
+							for(int i = 0; i < 3; i++){
 								if(backtrackNew.size()>0)
 									backtrackNew.remove(0);
 							}
@@ -173,7 +170,7 @@ public class Psychopath_Solver {
 					else
 						continue;
 				}
-				ArrayList<Coordinate> ret = findPath(black, iterate, next, target, path, backtrackNew, max);
+				ArrayList<Coordinate> ret = findPath(black, iterate, next, targets, path, backtrackNew, max);
 				if(ret!=null){
 					return ret;
 				}
@@ -197,13 +194,13 @@ public class Psychopath_Solver {
 		return ret;
 	}
 	
-	public static void printBoard(boolean[][] black, boolean[][] pink, Coordinate current, Coordinate target){
+	public static void printBoard(boolean[][] black, boolean[][] pink, Coordinate current, Set<Coordinate> target){
 		for(int i = 0; i < black.length; i++){
 			for(int j = 0; j < black[0].length; j++){
 				Coordinate at = new Coordinate(j,i);
 				if(at.equals(current))
 					System.out.print("@");
-				else if(at.equals(target))
+				else if(target.contains(at))
 					System.out.print("T");
 				else if(black[i][j])
 					System.out.print("B");
