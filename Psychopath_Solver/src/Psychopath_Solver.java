@@ -25,6 +25,11 @@ public class Psychopath_Solver {
 	static final int xOffset = 9;
 	static final int yOffset = 9;
 	
+	public enum Action{
+		UP, DOWN, LEFT, RIGHT;
+	}
+	public static int[][] heuristicVals;
+	
 	public static void main(String[] args) throws AWTException {
 		Robot r = new Robot();
 		int gridWidth = 0;
@@ -60,12 +65,17 @@ public class Psychopath_Solver {
 		gridOffset = (lastSwitchBackground+xOffset)/(double)offsets.size();
 		for(gridHeight=1; gridHeight*gridOffset < pixelHeight && !isBackground(new Color(screenCap.getRGB(0, (int)(gridHeight*gridOffset)))); gridHeight++);
 		
-		boolean[][] black = new boolean[gridHeight][gridWidth];
-		boolean[][] pink = new boolean[gridHeight][gridWidth];
+		heuristicVals = new int[gridWidth][gridHeight];
+//		for(int i = 0; i < gridWidth; i++){
+//			for(int j = 0; j < gridHeight; j++){
+//				heuristicVals[i][j] = gridWidth*gridHeight;
+//			}
+//		}
+		
+		boolean[][] black = new boolean[gridWidth][gridHeight];
+		boolean[][] pink = new boolean[gridWidth][gridHeight];
 		Coordinate start = new Coordinate(0,0);
 		Set<Coordinate> end = new HashSet<Coordinate>();
-		int max = 160;
-		doBacktrack = false;
 		delay(500);
 		System.out.println("reading board");
 		for(int x = 0; x < gridWidth; x++){
@@ -74,9 +84,9 @@ public class Psychopath_Solver {
 				if(c.equals(startC)){
 					start=new Coordinate(x,y);
 				} else if(c.equals(blackC)){
-					black[y][x]=true;
+					black[x][y]=true;
 				} else if(c.equals(pinkC)){
-					pink[y][x]=true;
+					pink[x][y]=true;
 				} else if(c.equals(blankC)){
 					//Do Nothing
 				} else{
@@ -85,9 +95,38 @@ public class Psychopath_Solver {
 			}
 		}
 
+		for(int i = 0; i < gridWidth*gridHeight; i++){
+			for(int x = 0; x < gridWidth; x++){
+				for(int y = 0; y < gridHeight; y++){
+					if(end.contains(new Coordinate(x,y))){
+						heuristicVals[x][y]=0;
+					}else{
+						int hVal = black.length*black[0].length;
+						int xOff=1,yOff=0;
+						if(inRange(x+xOff,y+yOff,black) && !black[x+xOff][y+yOff]){
+							hVal = Math.min(hVal,heuristicVals[x+xOff][y+yOff]);
+						}
+						xOff = -1;
+						if(inRange(x+xOff,y+yOff,black) && !black[x+xOff][y+yOff]){
+							hVal = Math.min(hVal,heuristicVals[x+xOff][y+yOff]);
+						}
+						xOff=0;
+						yOff=1;
+						if(inRange(x+xOff,y+yOff,black) && !black[x+xOff][y+yOff]){
+							hVal = Math.min(hVal,heuristicVals[x+xOff][y+yOff]);
+						}
+						yOff=-1;
+						if(inRange(x+xOff,y+yOff,black) && !black[x+xOff][y+yOff]){
+							hVal = Math.min(hVal,heuristicVals[x+xOff][y+yOff]);
+						}
+					}
+				}
+			}
+		}
+
 		printBoard(black, pink, start, end);
-		System.out.println("Beginning search for: " + max);
-		ArrayList<Coordinate> result = findPath(black, pink, start, end, new ArrayList<Coordinate>(), new ArrayList<Coordinate>(), max);
+		System.out.println("Beginning search");
+		ArrayList<Coordinate> result = findPath(black, pink, start, end, .5);
 		System.out.println("Result:");
 		System.out.println(result);
 		if(result != null){
@@ -107,76 +146,126 @@ public class Psychopath_Solver {
 
 	public static ArrayList<Direction> getSteps(ArrayList<Coordinate> path) throws Exception {
 		ArrayList<Direction> ret = new ArrayList<Direction>();
+		/*ArrayDeque<Coordinate> copy = path.clone();
+		while(copy.size()>=2){
+			ret.add(new Direction(copy.removeFirst(),copy.peekFirst()));
+		}*/
 		for(int i = 0; i < path.size()-1; i++){
-			ret.add(0, new Direction(path.get(i+1), path.get(i)));
+			ret.add(new Direction(path.get(i), path.get(i+1)));
 		}
 		return ret;
 	}
 
+	public static int getHeuristic(int x, int y, boolean[][] black, Set<Coordinate> target){
+		/*if(heuristicVals[x][y] < black.length*black[0].length){
+			return heuristicVals[x][y];
+		}
+		if(target.contains(new Coordinate(x,y))){
+			heuristicVals[x][y] = 0;
+			return heuristicVals[x][y];
+		}
+		int hVal = black.length*black[0].length;
+		int xOff=1,yOff=0;
+		if(inRange(x+xOff,y+yOff,black) && !black[x+xOff][y+yOff]){
+			boolean[][] blackCopy = copy(black);
+			blackCopy[x][y] = true;
+			hVal = Math.min(hVal,getHeuristic(x+xOff,y+yOff,blackCopy, target));
+		}
+		xOff = -1;
+		if(inRange(x+xOff,y+yOff,black) && !black[x+xOff][y+yOff]){
+			boolean[][] blackCopy = copy(black);
+			blackCopy[x][y] = true;
+			hVal = Math.min(hVal,getHeuristic(x+xOff,y+yOff,blackCopy, target));
+		}
+		xOff=0;
+		yOff=1;
+		if(inRange(x+xOff,y+yOff,black) && !black[x+xOff][y+yOff]){
+			boolean[][] blackCopy = copy(black);
+			blackCopy[x][y] = true;
+			hVal = Math.min(hVal,getHeuristic(x+xOff,y+yOff,blackCopy, target));
+		}
+		yOff=-1;
+		if(inRange(x+xOff,y+yOff,black) && !black[x+xOff][y+yOff]){
+			boolean[][] blackCopy = copy(black);
+			blackCopy[x][y] = true;
+			hVal = Math.min(hVal,getHeuristic(x+xOff,y+yOff,blackCopy, target));
+		}*/
+		return heuristicVals[x][y];
+	}
+	
+	public static ArrayList<Action> actions(State s, boolean[][] black){
+		int x = s.current.x, y = s.current.y;
+		ArrayList<Action> ret = new ArrayList<Action>();
+		if(inRange(x,y-1,black) && !black[x][y-1] && (!s.pinks[x][y-1] || (inRange(x,y-2,black) && !(s.pinks[x][y-2] || black[x][y-2])))){
+			ret.add(Action.UP);
+		}
+		if(inRange(x,y+1,black) && !black[x][y+1] && (!s.pinks[x][y+1] || (inRange(x,y+2,black) && !(s.pinks[x][y+2] || black[x][y+2])))){
+			ret.add(Action.DOWN);
+		}
+		if(inRange(x-1,y,black) && !black[x-1][y] && (!s.pinks[x-1][y] || (inRange(x-2,y,black) && !(s.pinks[x-2][y] || black[x-2][y])))){
+			ret.add(Action.LEFT);
+		}
+		if(inRange(x+1,y,black) && !black[x+1][y] && (!s.pinks[x+1][y] || (inRange(x+2,y,black) && !(s.pinks[x+2][y] || black[x+2][y])))){
+			ret.add(Action.RIGHT);
+		}
+		return ret;
+	}
+	
+	public static State successor(State s, Action a){
+		int x = s.current.x, y = s.current.y;
+		boolean[][] newPinks = copy(s.pinks);
+		switch(a){
+		case UP:
+			if(newPinks[x][y-1]){
+				newPinks[x][y-1]=false;
+				newPinks[x][y-2]=true;
+			}
+			return new State(new Coordinate(x,y-1),newPinks);
+		case DOWN:
+			if(newPinks[x][y+1]){
+				newPinks[x][y+1]=false;
+				newPinks[x][y+2]=true;
+			}
+			return new State(new Coordinate(x,y+1),newPinks);
+		case LEFT:
+			if(newPinks[x-1][y]){
+				newPinks[x-1][y]=false;
+				newPinks[x-2][y]=true;
+			}
+			return new State(new Coordinate(x-1,y),newPinks);
+		case RIGHT:
+			if(newPinks[x+1][y]){
+				newPinks[x+1][y]=false;
+				newPinks[x+2][y]=true;
+			}
+			return new State(new Coordinate(x+1,y),newPinks);
+		default:
+			return null;
+		}
+	}
 
-	public static ArrayList<Coordinate> findPath(boolean[][] black, boolean[][] pink, Coordinate current, Set<Coordinate> targets, ArrayList<Coordinate> path, ArrayList<Coordinate> backtrack, int max){
-		path.add(0,current);
-		if(targets.contains(current)){
-			return path;
-		}
-		if(path.size()==max+1){
-			path.remove(0);
-			return null;
-		}
-		boolean notTooFar = false;
-		for(Coordinate target : targets){
-			notTooFar = notTooFar || !(Math.abs(current.x-target.x) + Math.abs(current.y-target.y) > max-path.size()+1);
-		}
-		if(!notTooFar){
-			path.remove(0);
-			return null;
-		}
-		if(path.size()==1)
-			System.out.println("level 1");
-		if(path.size()==2)
-			System.out.println("level 2");
-		if(path.size()==3)
-			System.out.println("level 3");
-		for(int xOff=-1; xOff<=1; xOff++){
-			for(int yOff=-1; yOff<=1; yOff++){
-				if((xOff==0&&yOff==0)||(xOff!=0&&yOff!=0)) continue;
-				Coordinate next = new Coordinate(current.x+xOff, current.y+yOff);
-				try {
-					Direction d = new Direction(current, next);
-				} catch (Exception e) {
-					System.out.println("not adjacent??");
-					System.out.println(current);
-					System.out.println(next);
-					System.out.println("xOff: " + xOff + " yOff: " + yOff);
-				}
-				if(backtrack.contains(next)) continue;
-				if(next.x<0||next.x>=black[0].length||next.y<0||next.y>=black.length) continue;
-				if(black[next.y][next.x]) continue;
-				ArrayList<Coordinate> backtrackNew = (ArrayList<Coordinate>) backtrack.clone();
-				backtrackNew.add(0,current);
-				boolean[][] iterate = copy(pink);
-				if(pink[next.y][next.x]){
-					Coordinate push = new Coordinate(current.x+2*xOff, current.y+2*yOff);
-					if(!(push.x<0||push.x>=black[0].length||push.y<0||push.y>=black.length) && !black[push.y][push.x] && !pink[push.y][push.x]){
-						iterate[current.y+2*yOff][current.x+2*xOff]=true;
-						iterate[next.y][next.x]=false;
-						if(doBacktrack){
-							for(int i = 0; i < 3; i++){
-								if(backtrackNew.size()>0)
-									backtrackNew.remove(0);
-							}
-						}
-					}
-					else
-						continue;
-				}
-				ArrayList<Coordinate> ret = findPath(black, iterate, next, targets, path, backtrackNew, max);
-				if(ret!=null){
-					return ret;
+	public static ArrayList<Coordinate> findPath(boolean[][] black, boolean[][] pink, Coordinate current, Set<Coordinate> targets, double greedy){
+		PriorityQueue<SearchNode> open = new PriorityQueue<SearchNode>(1,new NodeCompare(1-greedy,greedy));
+		Set<State> closed = new HashSet<State>();
+		open.add(new SearchNode(null, new State(current, copy(pink)), null, 0, getHeuristic(current.x, current.y, black, targets)));
+		while(!open.isEmpty()){
+			SearchNode expand = open.remove();
+			if(closed.contains(expand.state)){
+				continue;
+			}
+			closed.add(expand.state);
+			if(targets.contains(expand.state.current)){
+				return expand.getPath();
+			}
+			ArrayList<Action> possibleActions = actions(expand.state,black);
+			for(Action action : possibleActions){
+				State newState = successor(expand.state, action);
+				if(!closed.contains(newState)){
+					SearchNode add = new SearchNode(action, newState, expand, 1, getHeuristic(newState.current.x, newState.current.y,black, targets));
+					open.add(add);
 				}
 			}
 		}
-		path.remove(0);
 		return null;
 	}
 	
@@ -194,17 +283,21 @@ public class Psychopath_Solver {
 		return ret;
 	}
 	
+	public static boolean inRange(int x, int y, boolean[][] arr){
+		return x >= 0 && x < arr.length && y >= 0 && y < arr[0].length;
+	}
+	
 	public static void printBoard(boolean[][] black, boolean[][] pink, Coordinate current, Set<Coordinate> target){
-		for(int i = 0; i < black.length; i++){
-			for(int j = 0; j < black[0].length; j++){
-				Coordinate at = new Coordinate(j,i);
+		for(int y = 0; y < black[0].length; y++){
+			for(int x = 0; x < black.length; x++){
+				Coordinate at = new Coordinate(x,y);
 				if(at.equals(current))
 					System.out.print("@");
 				else if(target.contains(at))
 					System.out.print("T");
-				else if(black[i][j])
+				else if(black[x][y])
 					System.out.print("B");
-				else if(pink[i][j])
+				else if(pink[x][y])
 					System.out.print("P");
 				else
 					System.out.print("-");

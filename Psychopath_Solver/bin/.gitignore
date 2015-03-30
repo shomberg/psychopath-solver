@@ -1,3 +1,7 @@
 /Coordinate.class
 /Direction.class
 /Psychopath_Solver.class
+/State.class
+/SearchNode.class
+/Psychopath_Solver$Action.class
+/NodeCompare.class
